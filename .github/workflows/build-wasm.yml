@@ -22,17 +22,14 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. ARCHITECTURE BLINDFOLD (The 77% Fix)
-          # We force the x86 header to be empty so it can't pull in forbidden intrinsics.
+          # 1. ARCHITECTURE BLINDFOLD
           echo "// Stripped for WASM" > src/crypto/cn/CryptoNight_x86.h
           
           # 2. VIRTUAL MEMORY SNIPE (The 76% Fix)
-          # Re-applying the fix for VirtualMemory without breaking headers.
-          sed -i '/void VirtualMemory::flushInstructionCache/,/}/ { /^{/ a return;
-          }' src/crypto/common/VirtualMemory_unix.cpp
+          # We use a safer way to return early from the forbidden function
+          sed -i '/void VirtualMemory::flushInstructionCache/,/}/ s/{/{ return; \/\/ /' src/crypto/common/VirtualMemory_unix.cpp
 
           # 3. GLOBAL STRIP OF HARDWARE HEADERS
-          # We search for and comment out includes that pull in x86-specific code.
           find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <x86intrin.h>/\/\/ stripped/g'
           find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <ia32intrin.h>/\/\/ stripped/g'
           find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <immintrin.h>/\/\/ stripped/g'
@@ -47,7 +44,8 @@ jobs:
           # 5. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
-          # 6. CONFIGURE & BUILD (Added -DXMRIG_ALGO_KAWPOW=OFF for faster/easier WASM build)
+          # 6. CONFIGURE & BUILD
+          # Note: Removed the sed -i '254,258...' line to fix the CMake Error.
           mkdir -p build && cd build
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
@@ -61,6 +59,7 @@ jobs:
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
+            -DWITH_ASM=OFF \
             -DCMAKE_BUILD_TYPE=Release \
             -DUV_INCLUDE_DIR=../scripts/deps/include \
             -DUV_LIBRARY=../scripts/deps/lib/libuv.a
