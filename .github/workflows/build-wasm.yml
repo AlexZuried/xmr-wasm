@@ -25,11 +25,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libuv1-dev
           
-          # MAGIC STEP: Fix the 'No TARGET xmrig' bug by bypassing the early custom command
+          # 1. FIX THE CRASH: Move the custom command to the end of the file 
+          # or simply bypass the early 'add_custom_command' that causes the error.
           sed -i 's/add_custom_command(TARGET xmrig/add_custom_command(OUTPUT xmrig.js/g' CMakeLists.txt
           
           mkdir -p build && cd build
           
+          # 2. Run the configuration
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DXMRIG_PROXY=OFF \
@@ -45,6 +47,7 @@ jobs:
             -DUV_INCLUDE_DIR=/usr/include \
             -DUV_LIBRARY=/usr/lib/x86_64-linux-gnu/libuv.so
             
+          # 3. Start the actual C++ compilation
           emmake make -j2
           
       - name: Upload Result
