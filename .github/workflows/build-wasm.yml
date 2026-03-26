@@ -25,21 +25,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libuv1-dev
           
-          # 1. REMOVE HARDWARE FLAGS (Prevent 'unsupported option' errors)
+          # 1. STRIP HARDWARE FLAGS (Prevent Wasm compiler errors)
           sed -i 's/-maes//g' CMakeLists.txt
           sed -i 's/-msse2//g' CMakeLists.txt
           
-          # 2. COMMENT OUT THE CRASHING LINE (Line 255-257)
-          # We use '#' to tell CMake to ignore these lines entirely
-          sed -i '255,257s/^/#/' CMakeLists.txt
+          # 2. COMMENT OUT THE CONFLICTING BLOCK (Lines 254 to 258)
+          # This safely hides the 'add_custom_command' without breaking the 'if/endif' nesting
+          sed -i '254,258s/^/#/' CMakeLists.txt
           
           mkdir -p build && cd build
           
-          # 3. RUN CONFIGURATION
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_SOFT_AES=ON \
-            -DSOFT_AES=ON \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
@@ -52,7 +50,6 @@ jobs:
             -DUV_INCLUDE_DIR=/usr/include \
             -DUV_LIBRARY=/usr/lib/x86_64-linux-gnu/libuv.so
             
-          # 4. START COMPILATION
           emmake make -j$(nproc)
           
       - name: Upload Result
