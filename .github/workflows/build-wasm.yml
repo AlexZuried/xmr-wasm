@@ -22,10 +22,23 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # This helps us see the folder structure if it fails again
-          ls -F 
+          # 1. Find where the heck the project file is
+          echo "--- Searching for CMakeLists.txt ---"
+          find . -name "CMakeLists.txt"
+          
+          # 2. Get the path dynamically
+          PROJECT_PATH=$(find . -name "CMakeLists.txt" -printf '%h\n' | head -n 1)
+          
+          if [ -z "$PROJECT_PATH" ]; then
+            echo "ERROR: Still no CMakeLists.txt found. Your fork might be empty."
+            exit 1
+          fi
+          
+          echo "Found project in: $PROJECT_PATH"
+          
+          # 3. Build from that path
           mkdir -p build && cd build
-          emcmake cmake .. \
+          emcmake cmake "$GITHUB_WORKSPACE/$PROJECT_PATH" \
             -DXMRIG_WASM=ON \
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
