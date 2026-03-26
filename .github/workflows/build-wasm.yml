@@ -25,8 +25,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libuv1-dev
           
-          # 1. THE DEEP CLEAN: Remove -maes from EVERY file in the project
-          # This finds all files and replaces -maes with nothing
+          # 1. CLEANUP: Deep clean hardware flags from all modules
           find . -type f -name "*.cmake" -exec sed -i 's/-maes//g' {} +
           find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
           
@@ -35,9 +34,10 @@ jobs:
           
           mkdir -p build && cd build
           
-          # 3. FORCE SOFT AES: Tell XMRig to use C++ math instead of Hardware
+          # 3. DISABLE GHOSTRIDER: It's incompatible with Wasm and causes the current error
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
+            -DWITH_GHOSTRIDER=OFF \
             -DWITH_SOFT_AES=ON \
             -DSOFT_AES=ON \
             -DWITH_HWLOC=OFF \
