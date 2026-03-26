@@ -25,27 +25,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libuv1-dev
           
-          # 1. STRIP HARDWARE FLAGS (Prevent Wasm compiler errors)
-          sed -i 's/-maes//g' CMakeLists.txt
-          sed -i 's/-msse2//g' CMakeLists.txt
+          # 1. THE DEEP CLEAN: Remove -maes from EVERY file in the project
+          # This finds all files and replaces -maes with nothing
+          find . -type f -name "*.cmake" -exec sed -i 's/-maes//g' {} +
+          find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
           
-          # 2. COMMENT OUT THE CONFLICTING BLOCK (Lines 254 to 258)
-          # This safely hides the 'add_custom_command' without breaking the 'if/endif' nesting
+          # 2. FIX NESTING: Comment out the problematic block again
           sed -i '254,258s/^/#/' CMakeLists.txt
           
           mkdir -p build && cd build
           
+          # 3. FORCE SOFT AES: Tell XMRig to use C++ math instead of Hardware
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_SOFT_AES=ON \
+            -DSOFT_AES=ON \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
-            -DWITH_ADL=OFF \
-            -DWITH_NVML=OFF \
-            -DWITH_OPENCL=OFF \
-            -DWITH_CUDA=OFF \
             -DCMAKE_BUILD_TYPE=Release \
             -DUV_INCLUDE_DIR=/usr/include \
             -DUV_LIBRARY=/usr/lib/x86_64-linux-gnu/libuv.so
