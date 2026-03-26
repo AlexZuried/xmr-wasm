@@ -27,8 +27,10 @@ jobs:
           
           mkdir -p build && cd build
           
+          # The fix: Ensure no conflicting flags and force the Wasm output name
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
+            -DXMRIG_PROXY=OFF \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
@@ -41,6 +43,7 @@ jobs:
             -DUV_INCLUDE_DIR=/usr/include \
             -DUV_LIBRARY=/usr/lib/x86_64-linux-gnu/libuv.so
             
+          # We use emmake here to actually start the C++ to WASM conversion
           emmake make -j2
           
       - name: Upload Result
