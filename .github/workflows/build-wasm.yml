@@ -22,44 +22,51 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. ARCHITECTURE BLINDFOLD
-          echo "// Stripped for WASM" > src/crypto/cn/CryptoNight_x86.h
+          # 1. RESET REPOSITORY
+          # Wipe out all previous sed hacks and start with pristine source code.
+          git reset --hard
           
-          # 2. VIRTUAL MEMORY SNIPE (The 76% Fix)
-          # We use a safer way to return early from the forbidden function
-          sed -i '/void VirtualMemory::flushInstructionCache/,/}/ s/{/{ return; \/\/ /' src/crypto/common/VirtualMemory_unix.cpp
-
-          # 3. GLOBAL STRIP OF HARDWARE HEADERS
-          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <x86intrin.h>/\/\/ stripped/g'
-          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <ia32intrin.h>/\/\/ stripped/g'
-          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <immintrin.h>/\/\/ stripped/g'
-          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
-          
-          # 4. FIX BasicCpuInfo
-          cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
-          #include "backend/cpu/platform/BasicCpuInfo.h"
-          namespace xmrig { BasicCpuInfo::BasicCpuInfo() {} }
+          # 2. CREATE THE COMPILER POLYFILL
+          # This safely mocks the OS-level x86 instructions that don't exist in WebAssembly,
+          # allowing the compiler to parse the files without stripping the actual hash logic.
+          cat << 'EOF' > wasm_compat.h
+          #pragma once
+          // Wasm has no physical instruction cache to flush
+          #define __builtin___clear_cache(start, end)
+          // Mock missing x86 hardware/system builtins
+          #define __builtin_ia32_readeflags_u32() 0
+          #define __builtin_ia32_writeeflags_u32(x)
+          #define __builtin_ia32_crc32qi(a, b) 0
+          #define __builtin_ia32_crc32hi(a, b) 0
+          #define __builtin_ia32_crc32si(a, b) 0
+          #define __builtin_ia32_rdpmc(x) 0
+          #define __builtin_ia32_rdtscp(x) 0
+          #define __builtin_ia32_wbinvd()
           EOF
 
-          # 5. BUILD DEPENDENCIES
+          # 3. SET COMPILER NATIVE ENVIRONMENT
+          # -msimd128 & -msse*: Instructs Emscripten to seamlessly translate x86 SSE into Wasm.
+          # -include: Injects our polyfill into every file automatically before compilation.
+          export CFLAGS="-msimd128 -msse -msse2 -msse3 -mssse3 -msse4.1 -include $(pwd)/wasm_compat.h"
+          export CXXFLAGS="-msimd128 -msse -msse2 -msse3 -mssse3 -msse4.1 -include $(pwd)/wasm_compat.h"
+          
+          # 4. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
-          # 6. CONFIGURE & BUILD
-          # Note: Removed the sed -i '254,258...' line to fix the CMake Error.
+          # 5. CONFIGURE & BUILD
+          # Clean build. No hacks. We use SOFT_AES to ensure cross-browser compatibility.
           mkdir -p build && cd build
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
-            -DARM_TARGET=ON \
-            -DWITH_GHOSTRIDER=OFF \
-            -DWITH_OPENCL=OFF \
-            -DWITH_CUDA=OFF \
             -DWITH_SOFT_AES=ON \
             -DSOFT_AES=ON \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
+            -DWITH_OPENCL=OFF \
+            -DWITH_CUDA=OFF \
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
-            -DWITH_ASM=OFF \
+            -DBUILD_STATIC=ON \
             -DCMAKE_BUILD_TYPE=Release \
             -DUV_INCLUDE_DIR=../scripts/deps/include \
             -DUV_LIBRARY=../scripts/deps/lib/libuv.a
