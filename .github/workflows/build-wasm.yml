@@ -27,20 +27,23 @@ jobs:
           find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
           sed -i '254,258s/^/#/' CMakeLists.txt
           
-          # 2. THE HARDWARE BYPASS: Wipe the x86-specific calls
-          # We're effectively telling the code: "Don't look for cpuid.h, you are Wasm."
-          sed -i 's/#include <cpuid.h>/\/\/ no cpuid/g' src/backend/cpu/platform/BasicCpuInfo.cpp
-          # Bypass the assembly calls that are crashing the build
-          sed -i 's/__cpuid_count/\/\/ no cpuid/g' src/backend/cpu/platform/BasicCpuInfo.cpp
-          sed -i 's/__asm__/\/\/ no asm/g' src/backend/cpu/platform/BasicCpuInfo.cpp
+          # 2. THE NUCLEAR HARDWARE PATCH
+          # We force BasicCpuInfo to return '1' core and generic info 
+          # by commenting out the x86 hardware probing logic entirely.
+          sed -i 's/#include <cpuid.h>/\/\/ removed/g' src/backend/cpu/platform/BasicCpuInfo.cpp
+          sed -i 's/__cpuid/\/\/ removed/g' src/backend/cpu/platform/BasicCpuInfo.cpp
+          sed -i 's/__asm__/\/\/ removed/g' src/backend/cpu/platform/BasicCpuInfo.cpp
           
+          # Special: Force the file to use a generic exit path
+          # This replaces the logic that uses the '=a' constraint
+          sed -i 's/defined(__x86_64__)/defined(DISABLED_X86)/g' src/backend/cpu/platform/BasicCpuInfo.cpp
+
           # 3. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
           mkdir -p build && cd build
           
           # 4. RUN CONFIGURATION
-          # Added -DXMRIG_OS_WASM to help the source code select the right paths
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DXMRIG_OS_WASM=ON \
