@@ -22,37 +22,29 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. THE NUCLEAR PATCH: Overwrite the crashing file with Wasm-safe C++
-          cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
-          #include "backend/cpu/platform/BasicCpuInfo.h"
-          namespace xmrig {
-          BasicCpuInfo::BasicCpuInfo() :
-              m_backend(nullptr),
-              m_nodes(1),
-              m_packages(1),
-              m_cores(1),
-              m_threads(1),
-              m_l2(0),
-              m_l3(0),
-              m_hasRDRAND(false)
-          {}
-          void BasicCpuInfo::jpm() {}
-          }
-          EOF
+          # 1. KILL X86 GLOBALLY: Force the project to believe it is NOT on x86
+          # We search for any mention of x86/x64 and replace it with a dummy string
+          find . -type f -name "*.h" -o -name "*.cpp" -o -name "*.cmake" | xargs sed -i 's/__x86_64__/DISABLED_ARCH/g'
+          find . -type f -name "*.h" -o -name "*.cpp" -o -name "*.cmake" | xargs sed -i 's/__i386__/DISABLED_ARCH/g'
+          
+          # 2. STRIP ASSEMBLER: Remove the 'cpuid' and 'xgetbv' calls from the entire source
+          # If the compiler can't see 'asm' or 'cpuid', it can't error on them.
+          find src/backend/cpu -type f -name "*.cpp" -exec sed -i 's/__cpuid/\/\/ removed/g' {} +
+          find src/backend/cpu -type f -name "*.cpp" -exec sed -i 's/__asm__/\/\/ removed/g' {} +
+          find src/backend/cpu -type f -name "*.cpp" -exec sed -i 's/#include <cpuid.h>/\/\/ removed/g' {} +
 
-          # 2. CLEANUP HARDWARE FLAGS
-          find . -type f -name "*.cmake" -exec sed -i 's/-maes//g' {} +
-          find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
+          # 3. FIX TARGET CRASH (Line 254-258)
           sed -i '254,258s/^/#/' CMakeLists.txt
           
-          # 3. BUILD DEPENDENCIES
+          # 4. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
           mkdir -p build && cd build
           
-          # 4. RUN CONFIGURATION
+          # 5. RUN CONFIGURATION (Strict isolation)
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
+            -DXMRIG_OS_WASM=ON \
             -DWITH_GHOSTRIDER=OFF \
             -DWITH_OPENCL=OFF \
             -DWITH_CUDA=OFF \
@@ -66,7 +58,7 @@ jobs:
             -DUV_INCLUDE_DIR=../scripts/deps/include \
             -DUV_LIBRARY=../scripts/deps/lib/libuv.a
             
-          # 5. COMPILATION
+          # 6. COMPILATION
           emmake make -j$(nproc)
           
       - name: Upload Result
