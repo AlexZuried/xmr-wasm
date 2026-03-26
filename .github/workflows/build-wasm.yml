@@ -22,32 +22,29 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libuv1-dev
-          
-          # 1. CLEANUP: Deep clean hardware flags from all modules
+          # 1. CLEANUP: Deep clean hardware flags and fix the Target crash
           find . -type f -name "*.cmake" -exec sed -i 's/-maes//g' {} +
           find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
-          
-          # 2. FIX NESTING: Comment out the problematic block again
           sed -i '254,258s/^/#/' CMakeLists.txt
           
           mkdir -p build && cd build
           
-          # 3. DISABLE GHOSTRIDER: It's incompatible with Wasm and causes the current error
+          # 2. THE FIX: Remove the /usr/include paths. 
+          # We need to use the internal XMRig UV or let Emscripten handle it.
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_GHOSTRIDER=OFF \
+            -DWITH_OPENCL=OFF \
+            -DWITH_CUDA=OFF \
             -DWITH_SOFT_AES=ON \
             -DSOFT_AES=ON \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DUV_INCLUDE_DIR=/usr/include \
-            -DUV_LIBRARY=/usr/lib/x86_64-linux-gnu/libuv.so
+            -DCMAKE_BUILD_TYPE=Release
             
+          # 3. COMPILATION
           emmake make -j$(nproc)
           
       - name: Upload Result
