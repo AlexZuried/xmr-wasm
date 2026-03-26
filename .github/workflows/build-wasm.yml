@@ -21,15 +21,6 @@ jobs:
           version: 'latest'
 
       - name: Build XMR-Wasm
-        If the sed commands are still failing to neutralize that function, it’s usually because of invisible formatting differences (like CRLF line endings or hidden tabs) in the source file that make the "find and replace" miss its target.
-
-To beat this, we will use the "Empty File Override" strategy. Instead of trying to edit the existing file, we will completely delete its contents and write a brand-new, 100% Wasm-compatible version from scratch.
-The "Nuclear" VirtualMemory Override
-
-Replace your Build XMR-Wasm step in .github/workflows/build-wasm.yml with this version. This is the most robust way to handle the 76% crash.
-YAML
-
-      - name: Build XMR-Wasm
         run: |
           # 1. DELETE AND REWRITE VirtualMemory_unix.cpp (The 76% Fix)
           # This completely bypasses the original file to ensure no llvm.clear_cache exists.
