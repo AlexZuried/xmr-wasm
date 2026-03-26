@@ -1,6 +1,22 @@
-- name: Checkout Source
+name: Wasm Build
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
         uses: actions/checkout@v4
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libuv1-dev libssl-dev
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
         with:
+          version: 'latest'
           submodules: recursive # This pulls in all the missing code parts
 
       - name: Build XMR-Wasm
@@ -18,3 +34,11 @@
             -DWITH_CUDA=OFF \
             -DCMAKE_BUILD_TYPE=Release
           emmake make -j2
+          
+      - name: Upload Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-payload
+          path: |
+            build/xmrig.js
+            build/xmrig.wasm
