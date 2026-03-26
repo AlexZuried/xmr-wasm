@@ -22,17 +22,30 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. PATCH HARDWARE PROBING (The "Boss Fight" fix)
-          # We force the code to think it's NOT on x86/x64 so it uses the safe C++ fallback
-          sed -i 's/defined(__x86_64__)/defined(DISABLED_ARCH)/g' src/backend/cpu/platform/BasicCpuInfo.cpp
-          sed -i 's/defined(__i386__)/defined(DISABLED_ARCH)/g' src/backend/cpu/platform/BasicCpuInfo.cpp
-          
-          # 2. STRIP HARDWARE FLAGS & TARGET FIX
+          # 1. THE NUCLEAR PATCH: Overwrite the crashing file with Wasm-safe C++
+          cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
+          #include "backend/cpu/platform/BasicCpuInfo.h"
+          namespace xmrig {
+          BasicCpuInfo::BasicCpuInfo() :
+              m_backend(nullptr),
+              m_nodes(1),
+              m_packages(1),
+              m_cores(1),
+              m_threads(1),
+              m_l2(0),
+              m_l3(0),
+              m_hasRDRAND(false)
+          {}
+          void BasicCpuInfo::jpm() {}
+          }
+          EOF
+
+          # 2. CLEANUP HARDWARE FLAGS
           find . -type f -name "*.cmake" -exec sed -i 's/-maes//g' {} +
           find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
           sed -i '254,258s/^/#/' CMakeLists.txt
           
-          # 3. BUILD DEPENDENCIES (Ensures libuv is ready)
+          # 3. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
           mkdir -p build && cd build
@@ -40,7 +53,6 @@ jobs:
           # 4. RUN CONFIGURATION
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
-            -DXMRIG_OS_WASM=ON \
             -DWITH_GHOSTRIDER=OFF \
             -DWITH_OPENCL=OFF \
             -DWITH_CUDA=OFF \
