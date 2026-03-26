@@ -22,52 +22,59 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. RESET REPOSITORY
+          # 1. CLEAN START
           git reset --hard
           
-          # 2. CREATE THE COMPILER POLYFILL
+          # 2. THE COMPATIBILITY BRIDGE (Header Injection)
+          # We define x86-specific intrinsics as safe NOPs or constants
+          # so the compiler doesn't choke on hardware-specific code.
           cat << 'EOF' > wasm_compat.h
           #pragma once
+          #include <stdint.h>
           #define __builtin___clear_cache(start, end)
-          #define __builtin_ia32_readeflags_u32() 0
-          #define __builtin_ia32_writeeflags_u32(x)
-          #define __builtin_ia32_crc32qi(a, b) 0
-          #define __builtin_ia32_crc32hi(a, b) 0
-          #define __builtin_ia32_crc32si(a, b) 0
-          #define __builtin_ia32_rdpmc(x) 0
-          #define __builtin_ia32_rdtscp(x) 0
-          #define __builtin_ia32_wbinvd()
+          static inline uint32_t __builtin_ia32_readeflags_u32() { return 0; }
+          #define __builtin_ia32_writeeflags_u32(x) ((void)0)
+          #define __builtin_ia32_crc32qi(a, b) (0)
+          #define __builtin_ia32_crc32hi(a, b) (0)
+          #define __builtin_ia32_crc32si(a, b) (0)
+          #define __builtin_ia32_rdpmc(x) (0)
+          #define __builtin_ia32_rdtscp(x) (0)
+          #define __builtin_ia32_wbinvd() ((void)0)
           EOF
 
-          # 3. BUILD DEPENDENCIES FIRST (Crucial Change)
-          # We build libuv and openssl using the standard host compiler
-          # BEFORE we export the Wasm-specific flags.
-          cd scripts
-          ./build_deps.sh
-          cd ..
+          # 3. BUILD DEPENDENCIES (Isolated Subshell)
+          (
+            cd scripts
+            ./build_deps.sh
+          )
+
+          # 4. ENVIRONMENT DEFINITION
+          # We use -msimd128 to leverage Wasm's native 128-bit vector instructions.
+          export COMPAT_FLAGS="-msimd128 -msse4.1 -include $(pwd)/wasm_compat.h"
+          export CFLAGS="$COMPAT_FLAGS"
+          export CXXFLAGS="$COMPAT_FLAGS"
           
-          # 4. SET COMPILER NATIVE ENVIRONMENT FOR XMRIG
-          # Now that dependencies are built, we safely enforce Wasm translation
-          export CFLAGS="-msimd128 -msse -msse2 -msse3 -mssse3 -msse4.1 -include $(pwd)/wasm_compat.h"
-          export CXXFLAGS="-msimd128 -msse -msse2 -msse3 -mssse3 -msse4.1 -include $(pwd)/wasm_compat.h"
-          
-          # 5. CONFIGURE & BUILD
+          # 5. CONFIGURATION & LINKAGE
+          # -DWITH_ASM=OFF is the "Pro" way to force the C++ path.
+          # -DBUILD_BENCHMARK=OFF ensures CMake focuses solely on the 'xmrig' target.
           mkdir -p build && cd build
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_SOFT_AES=ON \
             -DSOFT_AES=ON \
+            -DWITH_ASM=OFF \
+            -DBUILD_BENCHMARK=OFF \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
             -DWITH_OPENCL=OFF \
             -DWITH_CUDA=OFF \
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
-            -DBUILD_STATIC=ON \
             -DCMAKE_BUILD_TYPE=Release \
             -DUV_INCLUDE_DIR=../scripts/deps/include \
             -DUV_LIBRARY=../scripts/deps/lib/libuv.a
             
+          # 6. FINAL COMPILE
           emmake make -j$(nproc)
           
       - name: Upload Result
