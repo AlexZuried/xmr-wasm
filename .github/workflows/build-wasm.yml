@@ -8,31 +8,37 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libuv1-dev libssl-dev
+
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: 'latest' # Ensure you get the most modern compiler
+          version: 'latest'
 
       - name: Build XMR-Wasm
         run: |
           mkdir build && cd build
-          # The key is -DXMRIG_WASM=ON and disabling desktop-only features
+          # We must use emcmake to wrap the cmake command
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
-            -DWITH_SYSLOG=OFF \
+            -DWITH_ADL=OFF \
+            -DWITH_NVML=OFF \
+            -DWITH_OPENCL=OFF \
+            -DWITH_CUDA=OFF \
             -DCMAKE_BUILD_TYPE=Release
           
-          # Use -j2 because GitHub Free runners usually have 2 cores
+          # Use 2 cores for GitHub's free runners
           emmake make -j2
           
       - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
           name: wasm-payload
-          # XMRig usually outputs 'xmrig.js' and 'xmrig.wasm'
-          # Adjust the path if you renamed the project in CMakeLists.txt
           path: |
             build/xmrig.js
             build/xmrig.wasm
