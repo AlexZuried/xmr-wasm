@@ -25,9 +25,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libuv1-dev
           
+          # MAGIC STEP: Fix the 'No TARGET xmrig' bug by bypassing the early custom command
+          sed -i 's/add_custom_command(TARGET xmrig/add_custom_command(OUTPUT xmrig.js/g' CMakeLists.txt
+          
           mkdir -p build && cd build
           
-          # The fix: Ensure no conflicting flags and force the Wasm output name
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DXMRIG_PROXY=OFF \
@@ -43,7 +45,6 @@ jobs:
             -DUV_INCLUDE_DIR=/usr/include \
             -DUV_LIBRARY=/usr/lib/x86_64-linux-gnu/libuv.so
             
-          # We use emmake here to actually start the C++ to WASM conversion
           emmake make -j2
           
       - name: Upload Result
