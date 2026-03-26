@@ -22,28 +22,31 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. CLEANUP
-          rm -rf build && mkdir build
-          
-          # 2. THE ULTIMATE MINIMALIST PATCH
-          # This provides just enough code to satisfy the compiler without naming specific variables.
+          # 1. KILL INSTRUCTION CACHE (Fixes 76% crash)
+          # We make the flush function a 'no-op' because Wasm doesn't have a cache to flush.
+          sed -i 's/vmsize_t size)/vmsize_t size) { return; } \/\/ /' src/crypto/common/VirtualMemory_unix.cpp
+
+          # 2. FORCE GENERIC CRYPTO (Kill x86 Intrinsics)
+          # We find every place that tries to include x86/SSE headers and comment it out.
+          find . -type f -name "*.h" -o -name "*.cpp" | xargs sed -i 's/#include <x86intrin.h>/\/\/ stripped/g'
+          find . -type f -name "*.h" -o -name "*.cpp" | xargs sed -i 's/#include <immintrin.h>/\/\/ stripped/g'
+          find . -type f -name "*.h" -o -name "*.cpp" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
+
+          # 3. OVERWRITE BasicCpuInfo (Keep our previous working fix)
           cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
           #include "backend/cpu/platform/BasicCpuInfo.h"
-          namespace xmrig {
-          BasicCpuInfo::BasicCpuInfo() {}
-          }
+          namespace xmrig { BasicCpuInfo::BasicCpuInfo() {} }
           EOF
 
-          # 3. GLOBAL STRIP OF HARDWARE HEADERS
-          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
-          find . -type f -exec sed -i 's/-maes//g' {} +
+          # 4. TARGET CRASH FIX
           sed -i '254,258s/^/#/' CMakeLists.txt
           
-          # 4. BUILD DEPENDENCIES
+          # 5. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
-          # 5. CONFIGURE & BUILD
-          cd build
+          # 6. CONFIGURE & BUILD
+          # -DARM_TARGET=ON is the secret sauce to avoid x86 assembly entirely
+          mkdir -p build && cd build
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DARM_TARGET=ON \
@@ -51,6 +54,7 @@ jobs:
             -DWITH_OPENCL=OFF \
             -DWITH_CUDA=OFF \
             -DWITH_SOFT_AES=ON \
+            -DSOFT_AES=ON \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
