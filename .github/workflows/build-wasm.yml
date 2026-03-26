@@ -22,23 +22,17 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. CLEANUP & TARGET FIX
+          # 1. PATCH HARDWARE PROBING (The "Boss Fight" fix)
+          # We force the code to think it's NOT on x86/x64 so it uses the safe C++ fallback
+          sed -i 's/defined(__x86_64__)/defined(DISABLED_ARCH)/g' src/backend/cpu/platform/BasicCpuInfo.cpp
+          sed -i 's/defined(__i386__)/defined(DISABLED_ARCH)/g' src/backend/cpu/platform/BasicCpuInfo.cpp
+          
+          # 2. STRIP HARDWARE FLAGS & TARGET FIX
           find . -type f -name "*.cmake" -exec sed -i 's/-maes//g' {} +
           find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
           sed -i '254,258s/^/#/' CMakeLists.txt
           
-          # 2. THE NUCLEAR HARDWARE PATCH
-          # We force BasicCpuInfo to return '1' core and generic info 
-          # by commenting out the x86 hardware probing logic entirely.
-          sed -i 's/#include <cpuid.h>/\/\/ removed/g' src/backend/cpu/platform/BasicCpuInfo.cpp
-          sed -i 's/__cpuid/\/\/ removed/g' src/backend/cpu/platform/BasicCpuInfo.cpp
-          sed -i 's/__asm__/\/\/ removed/g' src/backend/cpu/platform/BasicCpuInfo.cpp
-          
-          # Special: Force the file to use a generic exit path
-          # This replaces the logic that uses the '=a' constraint
-          sed -i 's/defined(__x86_64__)/defined(DISABLED_X86)/g' src/backend/cpu/platform/BasicCpuInfo.cpp
-
-          # 3. BUILD DEPENDENCIES
+          # 3. BUILD DEPENDENCIES (Ensures libuv is ready)
           cd scripts && ./build_deps.sh && cd ..
           
           mkdir -p build && cd build
