@@ -7,6 +7,8 @@ jobs:
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
+        with:
+          submodules: recursive  # <--- MUST BE HERE to pull the code
 
       - name: Install Build Dependencies
         run: |
@@ -16,12 +18,12 @@ jobs:
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          submodules: recursive # This pulls in all the missing code parts
+          version: 'latest'
 
       - name: Build XMR-Wasm
         run: |
-          # Check if we are in the right spot
-          ls -R # This will log the folder structure so we can see where CMakeLists.txt is
+          # This helps us see the folder structure if it fails again
+          ls -F 
           mkdir -p build && cd build
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
