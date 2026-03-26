@@ -22,16 +22,11 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. Install the missing UV library headers on the runner
           sudo apt-get update
           sudo apt-get install -y libuv1-dev
           
-          # 2. Initialize submodules just in case
-          git submodule update --init --recursive
-          
           mkdir -p build && cd build
           
-          # 3. Run emcmake with the internal UV flag
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_HWLOC=OFF \
@@ -42,7 +37,9 @@ jobs:
             -DWITH_NVML=OFF \
             -DWITH_OPENCL=OFF \
             -DWITH_CUDA=OFF \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUV_INCLUDE_DIR=/usr/include \
+            -DUV_LIBRARY=/usr/lib/x86_64-linux-gnu/libuv.so
             
           emmake make -j2
           
