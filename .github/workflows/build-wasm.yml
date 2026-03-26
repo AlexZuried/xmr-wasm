@@ -22,14 +22,19 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. CLEANUP PREVIOUS ATTEMPTS
+          # 1. CLEANUP
           rm -rf build && mkdir build
           
-          # 2. THE NUCLEAR OVERWRITE (Targeting the exact file causing the 64% crash)
-          # We replace the entire content with a dummy class that does nothing hardware-related.
-          printf '#include "backend/cpu/platform/BasicCpuInfo.h"\nnamespace xmrig { BasicCpuInfo::BasicCpuInfo() : m_backend(nullptr), m_nodes(1), m_packages(1), m_cores(1), m_threads(1), m_l2(0), m_l3(0), m_hasRDRAND(false) {} \n void BasicCpuInfo::jpm() {} }' > src/backend/cpu/platform/BasicCpuInfo.cpp
+          # 2. THE ULTIMATE MINIMALIST PATCH
+          # This provides just enough code to satisfy the compiler without naming specific variables.
+          cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
+          #include "backend/cpu/platform/BasicCpuInfo.h"
+          namespace xmrig {
+          BasicCpuInfo::BasicCpuInfo() {}
+          }
+          EOF
 
-          # 3. GLOBAL STRIP: Remove any lingering x86 headers/flags from the entire source tree
+          # 3. GLOBAL STRIP OF HARDWARE HEADERS
           find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
           find . -type f -exec sed -i 's/-maes//g' {} +
           sed -i '254,258s/^/#/' CMakeLists.txt
