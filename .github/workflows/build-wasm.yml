@@ -21,24 +21,39 @@ jobs:
           version: 'latest'
 
       - name: Build XMR-Wasm
-        run: |
-          # 1. FIX THE CACHE CRASH (The 76% Wall)
-          # This replaces the body of flushInstructionCache with a return statement.
-          sed -i 's/void VirtualMemory::flushInstructionCache(void\* ptr, size_t size)/void VirtualMemory::flushInstructionCache(void* ptr, size_t size) { return; } \/\/ /' src/crypto/common/VirtualMemory_unix.cpp
+        If the sed commands are still failing to neutralize that function, it’s usually because of invisible formatting differences (like CRLF line endings or hidden tabs) in the source file that make the "find and replace" miss its target.
 
-          # 2. STRIP HARDWARE FLAGS (Previous fixes)
-          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
-          find . -type f -exec sed -i 's/-maes//g' {} +
-          sed -i '254,258s/^/#/' CMakeLists.txt
-          
-          # 3. FIX BasicCpuInfo CONSTRUCTOR (The 64% Wall)
-          cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
-          #include "backend/cpu/platform/BasicCpuInfo.h"
+To beat this, we will use the "Empty File Override" strategy. Instead of trying to edit the existing file, we will completely delete its contents and write a brand-new, 100% Wasm-compatible version from scratch.
+The "Nuclear" VirtualMemory Override
+
+Replace your Build XMR-Wasm step in .github/workflows/build-wasm.yml with this version. This is the most robust way to handle the 76% crash.
+YAML
+
+      - name: Build XMR-Wasm
+        run: |
+          # 1. DELETE AND REWRITE VirtualMemory_unix.cpp (The 76% Fix)
+          # This completely bypasses the original file to ensure no llvm.clear_cache exists.
+          cat <<EOF > src/crypto/common/VirtualMemory_unix.cpp
+          #include "crypto/common/VirtualMemory.h"
           namespace xmrig {
-          BasicCpuInfo::BasicCpuInfo() {}
+          void* VirtualMemory::allocate(size_t size, bool, bool, bool, bool) { return malloc(size); }
+          void VirtualMemory::free(void* ptr, size_t, size_t) { ::free(ptr); }
+          void VirtualMemory::flushInstructionCache(void*, size_t) { /* No-op for Wasm */ }
           }
           EOF
 
+          # 2. OVERWRITE BasicCpuInfo (The 64% Fix)
+          cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
+          #include "backend/cpu/platform/BasicCpuInfo.h"
+          namespace xmrig { BasicCpuInfo::BasicCpuInfo() {} }
+          EOF
+
+          # 3. GLOBAL STRIP OF HARDWARE FLAGS
+          find . -type f -exec sed -i 's/-maes//g' {} +
+          find . -type f -exec sed -i 's/-msse4.1//g' {} +
+          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
+          sed -i '254,258s/^/#/' CMakeLists.txt
+          
           # 4. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
@@ -51,6 +66,7 @@ jobs:
             -DWITH_OPENCL=OFF \
             -DWITH_CUDA=OFF \
             -DWITH_SOFT_AES=ON \
+            -DSOFT_AES=ON \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
