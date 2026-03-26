@@ -1,0 +1,20 @@
+name: Wasm Build
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14 # Sets up emsdk for you
+      
+      - name: Build XMR-Wasm
+        run: |
+          mkdir build && cd build
+          emcmake cmake .. -DCMAKE_BUILD_TYPE=Release
+          emmake make
+          
+      - name: Upload Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-payload
+          path: build/xmr.* # This grabs xmr.js and xmr.wasm
