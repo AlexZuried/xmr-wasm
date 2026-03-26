@@ -22,15 +22,19 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. CLEANUP: Deep clean hardware flags and fix the Target crash
+          # 1. CLEANUP & PATCH
           find . -type f -name "*.cmake" -exec sed -i 's/-maes//g' {} +
           find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
           sed -i '254,258s/^/#/' CMakeLists.txt
           
+          # 2. BUILD DEPENDENCIES (The Fix for UV)
+          # This script builds a Wasm-compatible libuv inside the project
+          cd scripts && ./build_deps.sh && cd ..
+          
           mkdir -p build && cd build
           
-          # 2. THE FIX: Remove the /usr/include paths. 
-          # We need to use the internal XMRig UV or let Emscripten handle it.
+          # 3. RUN CONFIGURATION
+          # We point to the 'scripts/deps' folder we just created
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_GHOSTRIDER=OFF \
@@ -42,9 +46,10 @@ jobs:
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH=$(pwd)/../scripts/deps
             
-          # 3. COMPILATION
+          # 4. COMPILATION
           emmake make -j$(nproc)
           
       - name: Upload Result
