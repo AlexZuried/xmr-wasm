@@ -22,30 +22,32 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. SURGICAL SNIPE (The 76% Wall)
-          # We find the specific function causing the LLVM error and force it to return early.
-          # This avoids "undeclared identifier" errors because we don't touch the includes.
+          # 1. ARCHITECTURE BLINDFOLD (The 77% Fix)
+          # We force the x86 header to be empty so it can't pull in forbidden intrinsics.
+          echo "// Stripped for WASM" > src/crypto/cn/CryptoNight_x86.h
+          
+          # 2. VIRTUAL MEMORY SNIPE (The 76% Fix)
+          # Re-applying the fix for VirtualMemory without breaking headers.
           sed -i '/void VirtualMemory::flushInstructionCache/,/}/ { /^{/ a return;
           }' src/crypto/common/VirtualMemory_unix.cpp
 
-          # 2. GLOBAL STRIP OF HARDWARE FLAGS
-          # This ensures no stray -maes or x86 headers sneak in.
-          find . -type f -exec sed -i 's/-maes//g' {} +
-          find . -type f -exec sed -i 's/-msse4.1//g' {} +
-          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
+          # 3. GLOBAL STRIP OF HARDWARE HEADERS
+          # We search for and comment out includes that pull in x86-specific code.
           find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <x86intrin.h>/\/\/ stripped/g'
-          sed -i '254,258s/^/#/' CMakeLists.txt
+          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <ia32intrin.h>/\/\/ stripped/g'
+          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <immintrin.h>/\/\/ stripped/g'
+          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
           
-          # 3. FIX BasicCpuInfo (The 64% Wall)
+          # 4. FIX BasicCpuInfo
           cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
           #include "backend/cpu/platform/BasicCpuInfo.h"
           namespace xmrig { BasicCpuInfo::BasicCpuInfo() {} }
           EOF
 
-          # 4. BUILD DEPENDENCIES
+          # 5. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
-          # 5. CONFIGURE & BUILD
+          # 6. CONFIGURE & BUILD (Added -DXMRIG_ALGO_KAWPOW=OFF for faster/easier WASM build)
           mkdir -p build && cd build
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
