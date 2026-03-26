@@ -22,10 +22,16 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # Ensure all submodules (like UV and Argon2) are actually pulled
+          # 1. Install the missing UV library headers on the runner
+          sudo apt-get update
+          sudo apt-get install -y libuv1-dev
+          
+          # 2. Initialize submodules just in case
           git submodule update --init --recursive
           
           mkdir -p build && cd build
+          
+          # 3. Run emcmake with the internal UV flag
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_HWLOC=OFF \
@@ -37,8 +43,7 @@ jobs:
             -DWITH_OPENCL=OFF \
             -DWITH_CUDA=OFF \
             -DCMAKE_BUILD_TYPE=Release
-          
-          # If cmake still fails here, we will switch to a manual build of the UV dependency
+            
           emmake make -j2
           
       - name: Upload Result
