@@ -25,15 +25,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libuv1-dev
           
-          # NUCLEAR FIX: Delete the line that causes 'No TARGET xmrig' crash
-          # This line (255) is usually just a helper for web-embedding that we don't need for the core build
-          sed -i '255d' CMakeLists.txt
+          # 1. REMOVE HARDWARE FLAGS: WebAssembly is a virtual CPU; it hates -maes
+          sed -i 's/-maes//g' CMakeLists.txt
+          sed -i 's/-msse2//g' CMakeLists.txt
+          
+          # 2. FIX THE TARGET ERROR: Prevents the "No TARGET xmrig" crash
+          sed -i 's/add_custom_command(TARGET xmrig/add_custom_command(OUTPUT xmrig.js/g' CMakeLists.txt || true
           
           mkdir -p build && cd build
           
+          # 3. FORCE SOFTWARE MODE: This is the secret to browser mining
           emcmake cmake .. \
-            -DXMRIG_WASM=ON \
-            -DXMRIG_PROXY=OFF \
+            -DWITH_SOFT_AES=ON \
+            -DSOFT_AES=ON \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
@@ -46,7 +50,7 @@ jobs:
             -DUV_INCLUDE_DIR=/usr/include \
             -DUV_LIBRARY=/usr/lib/x86_64-linux-gnu/libuv.so
             
-          emmake make -j2
+          emmake make -j$(nproc)
           
       - name: Upload Result
         uses: actions/upload-artifact@v4
