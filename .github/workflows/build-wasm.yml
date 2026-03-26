@@ -22,19 +22,26 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. CLEANUP & PATCH
+          # 1. CLEANUP & PATCHING
           find . -type f -name "*.cmake" -exec sed -i 's/-maes//g' {} +
           find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
           sed -i '254,258s/^/#/' CMakeLists.txt
           
-          # 2. BUILD DEPENDENCIES
+          # 2. THE HARDWARE BYPASS: Force BasicCpuInfo to be generic
+          # This prevents the compiler from trying to use x86-only headers
+          sed -i 's/#include <cpuid.h>/ \/\/ removed cpuid/g' src/backend/cpu/platform/BasicCpuInfo.cpp
+          # Ensure XMRIG_OS_WASM is defined to skip low-level assembly
+          
+          # 3. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
           mkdir -p build && cd build
           
-          # 3. DIRECT MAPPING: Point exactly to the libraries we just built
+          # 4. RUN CONFIGURATION
+          # We add -DXMRIG_OS_WASM=ON to ensure the code knows it's in a browser
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
+            -DXMRIG_OS_WASM=ON \
             -DWITH_GHOSTRIDER=OFF \
             -DWITH_OPENCL=OFF \
             -DWITH_CUDA=OFF \
@@ -48,7 +55,7 @@ jobs:
             -DUV_INCLUDE_DIR=../scripts/deps/include \
             -DUV_LIBRARY=../scripts/deps/lib/libuv.a
             
-          # 4. COMPILATION
+          # 5. COMPILATION
           emmake make -j$(nproc)
           
       - name: Upload Result
