@@ -16,7 +16,6 @@ jobs:
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: 'latest'
           submodules: recursive # This pulls in all the missing code parts
 
       - name: Build XMR-Wasm
