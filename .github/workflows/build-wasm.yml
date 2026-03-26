@@ -22,15 +22,17 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. CLEANUP & PATCHING
+          # 1. CLEANUP & TARGET FIX
           find . -type f -name "*.cmake" -exec sed -i 's/-maes//g' {} +
           find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
           sed -i '254,258s/^/#/' CMakeLists.txt
           
-          # 2. THE HARDWARE BYPASS: Force BasicCpuInfo to be generic
-          # This prevents the compiler from trying to use x86-only headers
-          sed -i 's/#include <cpuid.h>/ \/\/ removed cpuid/g' src/backend/cpu/platform/BasicCpuInfo.cpp
-          # Ensure XMRIG_OS_WASM is defined to skip low-level assembly
+          # 2. THE HARDWARE BYPASS: Wipe the x86-specific calls
+          # We're effectively telling the code: "Don't look for cpuid.h, you are Wasm."
+          sed -i 's/#include <cpuid.h>/\/\/ no cpuid/g' src/backend/cpu/platform/BasicCpuInfo.cpp
+          # Bypass the assembly calls that are crashing the build
+          sed -i 's/__cpuid_count/\/\/ no cpuid/g' src/backend/cpu/platform/BasicCpuInfo.cpp
+          sed -i 's/__asm__/\/\/ no asm/g' src/backend/cpu/platform/BasicCpuInfo.cpp
           
           # 3. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
@@ -38,7 +40,7 @@ jobs:
           mkdir -p build && cd build
           
           # 4. RUN CONFIGURATION
-          # We add -DXMRIG_OS_WASM=ON to ensure the code knows it's in a browser
+          # Added -DXMRIG_OS_WASM to help the source code select the right paths
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DXMRIG_OS_WASM=ON \
