@@ -27,14 +27,12 @@ jobs:
           find . -type f -name "CMakeLists.txt" -exec sed -i 's/-maes//g' {} +
           sed -i '254,258s/^/#/' CMakeLists.txt
           
-          # 2. BUILD DEPENDENCIES (The Fix for UV)
-          # This script builds a Wasm-compatible libuv inside the project
+          # 2. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
           mkdir -p build && cd build
           
-          # 3. RUN CONFIGURATION
-          # We point to the 'scripts/deps' folder we just created
+          # 3. DIRECT MAPPING: Point exactly to the libraries we just built
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_GHOSTRIDER=OFF \
@@ -47,7 +45,8 @@ jobs:
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH=$(pwd)/../scripts/deps
+            -DUV_INCLUDE_DIR=../scripts/deps/include \
+            -DUV_LIBRARY=../scripts/deps/lib/libuv.a
             
           # 4. COMPILATION
           emmake make -j$(nproc)
