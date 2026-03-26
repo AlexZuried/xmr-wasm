@@ -23,17 +23,12 @@ jobs:
       - name: Build XMR-Wasm
         run: |
           # 1. RESET REPOSITORY
-          # Wipe out all previous sed hacks and start with pristine source code.
           git reset --hard
           
           # 2. CREATE THE COMPILER POLYFILL
-          # This safely mocks the OS-level x86 instructions that don't exist in WebAssembly,
-          # allowing the compiler to parse the files without stripping the actual hash logic.
           cat << 'EOF' > wasm_compat.h
           #pragma once
-          // Wasm has no physical instruction cache to flush
           #define __builtin___clear_cache(start, end)
-          // Mock missing x86 hardware/system builtins
           #define __builtin_ia32_readeflags_u32() 0
           #define __builtin_ia32_writeeflags_u32(x)
           #define __builtin_ia32_crc32qi(a, b) 0
@@ -44,17 +39,19 @@ jobs:
           #define __builtin_ia32_wbinvd()
           EOF
 
-          # 3. SET COMPILER NATIVE ENVIRONMENT
-          # -msimd128 & -msse*: Instructs Emscripten to seamlessly translate x86 SSE into Wasm.
-          # -include: Injects our polyfill into every file automatically before compilation.
+          # 3. BUILD DEPENDENCIES FIRST (Crucial Change)
+          # We build libuv and openssl using the standard host compiler
+          # BEFORE we export the Wasm-specific flags.
+          cd scripts
+          ./build_deps.sh
+          cd ..
+          
+          # 4. SET COMPILER NATIVE ENVIRONMENT FOR XMRIG
+          # Now that dependencies are built, we safely enforce Wasm translation
           export CFLAGS="-msimd128 -msse -msse2 -msse3 -mssse3 -msse4.1 -include $(pwd)/wasm_compat.h"
           export CXXFLAGS="-msimd128 -msse -msse2 -msse3 -mssse3 -msse4.1 -include $(pwd)/wasm_compat.h"
           
-          # 4. BUILD DEPENDENCIES
-          cd scripts && ./build_deps.sh && cd ..
-          
           # 5. CONFIGURE & BUILD
-          # Clean build. No hacks. We use SOFT_AES to ensure cross-browser compatibility.
           mkdir -p build && cd build
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
