@@ -22,32 +22,30 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. PRE-BUILD PATCH
-          # Fix the Target crash in CMakeLists
+          # 1. CLEANUP PREVIOUS ATTEMPTS
+          rm -rf build && mkdir build
+          
+          # 2. THE NUCLEAR OVERWRITE (Targeting the exact file causing the 64% crash)
+          # We replace the entire content with a dummy class that does nothing hardware-related.
+          printf '#include "backend/cpu/platform/BasicCpuInfo.h"\nnamespace xmrig { BasicCpuInfo::BasicCpuInfo() : m_backend(nullptr), m_nodes(1), m_packages(1), m_cores(1), m_threads(1), m_l2(0), m_l3(0), m_hasRDRAND(false) {} \n void BasicCpuInfo::jpm() {} }' > src/backend/cpu/platform/BasicCpuInfo.cpp
+
+          # 3. GLOBAL STRIP: Remove any lingering x86 headers/flags from the entire source tree
+          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
+          find . -type f -exec sed -i 's/-maes//g' {} +
           sed -i '254,258s/^/#/' CMakeLists.txt
           
-          # 2. BUILD DEPENDENCIES
-          # This script often re-triggers hardware detection, so we run it early
+          # 4. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
-          # 3. THE UNIVERSAL STRIPPER (The "Pro" Fix)
-          # We search EVERY file (source, cmake, and generated makefiles) 
-          # and rip out all x86 hardware flags.
-          find . -type f -exec sed -i 's/-maes//g' {} +
-          find . -type f -exec sed -i 's/-msse4.1//g' {} +
-          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ no-cpuid/g'
-          
-          mkdir -p build && cd build
-          
-          # 4. RUN CONFIGURATION
-          # We use -DARM_TARGET=ON as a trick; it forces XMRig to skip x86-specific code
+          # 5. CONFIGURE & BUILD
+          cd build
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DARM_TARGET=ON \
             -DWITH_GHOSTRIDER=OFF \
             -DWITH_OPENCL=OFF \
             -DWITH_CUDA=OFF \
-            -DSOFT_AES=ON \
+            -DWITH_SOFT_AES=ON \
             -DWITH_HWLOC=OFF \
             -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
@@ -56,7 +54,6 @@ jobs:
             -DUV_INCLUDE_DIR=../scripts/deps/include \
             -DUV_LIBRARY=../scripts/deps/lib/libuv.a
             
-          # 5. FINAL COMPILATION
           emmake make -j$(nproc)
           
       - name: Upload Result
