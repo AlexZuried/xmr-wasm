@@ -22,27 +22,26 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. THE SURGICAL BYPASS (The 76% Fix)
-          # We wrap the entire content of VirtualMemory_unix.cpp in an #ifndef 
-          # so the compiler sees an empty file, then we provide a generic flush.
-          sed -i '1i #include <cstdlib>' src/crypto/common/VirtualMemory_unix.cpp
-          sed -i '2i #ifndef __EMSCRIPTEN__' src/crypto/common/VirtualMemory_unix.cpp
-          echo "#endif" >> src/crypto/common/VirtualMemory_unix.cpp
-          echo "namespace xmrig { void VirtualMemory::flushInstructionCache(void*, size_t) {} }" >> src/crypto/common/VirtualMemory_unix.cpp
+          # 1. SURGICAL SNIPE (The 76% Wall)
+          # We find the specific function causing the LLVM error and force it to return early.
+          # This avoids "undeclared identifier" errors because we don't touch the includes.
+          sed -i '/void VirtualMemory::flushInstructionCache/,/}/ { /^{/ a return;
+          }' src/crypto/common/VirtualMemory_unix.cpp
 
-          # 2. FIX BasicCpuInfo (The 64% Fix)
-          # We use a similar approach to ensure the namespace is perfect.
+          # 2. GLOBAL STRIP OF HARDWARE FLAGS
+          # This ensures no stray -maes or x86 headers sneak in.
+          find . -type f -exec sed -i 's/-maes//g' {} +
+          find . -type f -exec sed -i 's/-msse4.1//g' {} +
+          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
+          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <x86intrin.h>/\/\/ stripped/g'
+          sed -i '254,258s/^/#/' CMakeLists.txt
+          
+          # 3. FIX BasicCpuInfo (The 64% Wall)
           cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
           #include "backend/cpu/platform/BasicCpuInfo.h"
           namespace xmrig { BasicCpuInfo::BasicCpuInfo() {} }
           EOF
 
-          # 3. STRIP HARDWARE FLAGS
-          find . -type f -exec sed -i 's/-maes//g' {} +
-          find . -type f -exec sed -i 's/-msse4.1//g' {} +
-          find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
-          sed -i '254,258s/^/#/' CMakeLists.txt
-          
           # 4. BUILD DEPENDENCIES
           cd scripts && ./build_deps.sh && cd ..
           
