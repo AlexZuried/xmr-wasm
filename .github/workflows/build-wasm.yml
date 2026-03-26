@@ -22,24 +22,22 @@ jobs:
 
       - name: Build XMR-Wasm
         run: |
-          # 1. DELETE AND REWRITE VirtualMemory_unix.cpp (The 76% Fix)
-          # This completely bypasses the original file to ensure no llvm.clear_cache exists.
-          cat <<EOF > src/crypto/common/VirtualMemory_unix.cpp
-          #include "crypto/common/VirtualMemory.h"
-          namespace xmrig {
-          void* VirtualMemory::allocate(size_t size, bool, bool, bool, bool) { return malloc(size); }
-          void VirtualMemory::free(void* ptr, size_t, size_t) { ::free(ptr); }
-          void VirtualMemory::flushInstructionCache(void*, size_t) { /* No-op for Wasm */ }
-          }
-          EOF
+          # 1. THE SURGICAL BYPASS (The 76% Fix)
+          # We wrap the entire content of VirtualMemory_unix.cpp in an #ifndef 
+          # so the compiler sees an empty file, then we provide a generic flush.
+          sed -i '1i #include <cstdlib>' src/crypto/common/VirtualMemory_unix.cpp
+          sed -i '2i #ifndef __EMSCRIPTEN__' src/crypto/common/VirtualMemory_unix.cpp
+          echo "#endif" >> src/crypto/common/VirtualMemory_unix.cpp
+          echo "namespace xmrig { void VirtualMemory::flushInstructionCache(void*, size_t) {} }" >> src/crypto/common/VirtualMemory_unix.cpp
 
-          # 2. OVERWRITE BasicCpuInfo (The 64% Fix)
+          # 2. FIX BasicCpuInfo (The 64% Fix)
+          # We use a similar approach to ensure the namespace is perfect.
           cat <<EOF > src/backend/cpu/platform/BasicCpuInfo.cpp
           #include "backend/cpu/platform/BasicCpuInfo.h"
           namespace xmrig { BasicCpuInfo::BasicCpuInfo() {} }
           EOF
 
-          # 3. GLOBAL STRIP OF HARDWARE FLAGS
+          # 3. STRIP HARDWARE FLAGS
           find . -type f -exec sed -i 's/-maes//g' {} +
           find . -type f -exec sed -i 's/-msse4.1//g' {} +
           find . -type f -name "*.cpp" -o -name "*.h" | xargs sed -i 's/#include <cpuid.h>/\/\/ stripped/g'
