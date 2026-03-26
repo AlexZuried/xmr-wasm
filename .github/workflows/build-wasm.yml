@@ -26,6 +26,7 @@ jobs:
           emcmake cmake .. \
             -DXMRIG_WASM=ON \
             -DWITH_HWLOC=OFF \
+            -DWITH_LIBCPUID=OFF \
             -DWITH_HTTPD=OFF \
             -DWITH_TLS=OFF \
             -DWITH_ADL=OFF \
